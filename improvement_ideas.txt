@@ -1,0 +1,3 @@
+1. Another thing, I noticed the bands are equally weighted. Can we distribute according to its distribution std-deviations(1-sigma, k-sigma[k is risk threshold, we can find], 2 sigma, etc) for placing them in bands
+
+2. Give me 3-4 impactful resume bullet points for this. (a) Try to cover the important technical stuff that interviewer actually wants to see. (b) Claims should be honest and practical, industry relevant. (c) Wording should be consize, impactful. (d) Try include numbers wherever relevant. 
