@@ -209,6 +209,12 @@ regulatory interpretability requirements make it necessary — not used here.)*
   real-world accuracy.
 - **Stratified k-fold CV, k = 2 to 16**, across all three models, to assess
   stability of model ranking before committing to a final model choice.
+
+![CV metrics across k](metrics_vs_k.png)
+*AUC, KS, Gini, and other metrics stayed roughly flat across k for all three
+models — meaning the model ranking wasn't sensitive to the fold count
+chosen, a useful stability check before picking a final model.*
+
 - **Winning model selected by mean CV AUC**: **XGBoost**, in this run.
 
 ### Metrics
@@ -299,6 +305,26 @@ G–J more finely to see where exactly the divergence starts.
   it only has 6 of the 62 features available
 - See `reject_inference_comparison.txt` for baseline-vs-augmented performance
   after incorporating reject inference
+
+### Supporting visuals
+
+![Calibration plot](calibration_plot.png)
+*Reliability diagram for the held-out test set. Grades A–F sit close to the
+diagonal (well-calibrated); grades G–J drift below it — the model
+overstates default risk for the highest-risk applicants, as detailed above.*
+
+![PD distribution](pd_distribution.png)
+*Distribution of predicted PD across the test set — most applicants cluster
+at low-to-moderate risk, consistent with the ~21% overall default rate.*
+
+![SHAP feature importance](shap_summary.png)
+*Top drivers of the model's predictions, by mean absolute SHAP value —
+useful both for sanity-checking that the model leans on plausible
+credit-risk signals, and as a starting point for per-applicant explanations.*
+
+*(`eda_numeric_hists.png`, `eda_categorical_bars.png`, and `loss_curves.png`
+are also in the repo but not embedded here — they're exploratory/diagnostic
+rather than results, open them directly if useful.)*
 
 ## 9. Plots produced
 
