@@ -137,6 +137,14 @@ ever contributes a bias-correction signal, never a directly trained outcome).
 
 ## 6. How to run (quick start)
 
+**Trained model artifacts** (`final_model.pkl`, `calibrator.pkl`,
+`reduced_model_baseline.pkl`, `reduced_model_augmented.pkl`,
+`label_encoders.pkl`) aren't committed to this repo directly — download them
+from the [Releases page](../../releases) instead, or regenerate them from
+scratch by running the pipeline below. Place downloaded `.pkl` files in the
+project root before running any script that loads them (e.g. `08` needs
+`label_encoders.pkl`).
+
 **Environment setup** (once):
 ```bash
 pip install pandas numpy scikit-learn matplotlib xgboost lightgbm catboost shap --break-system-packages
@@ -227,28 +235,70 @@ monotonic, so it doesn't change feature importance ranking — SHAP on the raw
 model is standard practice). Produces both global feature importance
 (`shap_summary.png`) and the underlying values for per-applicant explanation.
 
-## 8. Results (from the run reflected in this conversation)
+## 8. Results (actual, from the completed run)
 
-> Fill in / verify final numbers from your own output files — some figures
-> below are from intermediate runs referenced during development; the
-> authoritative source is always the corresponding output file.
+**Held-out test set performance (full 62-feature model, XGBoost):**
 
-- Raw accepted data loaded: **1,048,575 rows × 89 columns**
-- After filtering to resolved loans: **611,803 rows**, target positive rate
-  **~21.2%**
-- After imputation/encoding, model-ready feature matrix: **578,964 rows × 62
-  features** (some rows dropped in the pipeline's missing-value/consistency
-  steps), positive rate **21.384%**
-- Best model by mean CV AUC (k=2–16): **XGBoost**
-- Reduced 6-feature model (accepted-only baseline, used for reject scoring):
-  **test AUC 0.6435, KS 0.2056** — noticeably weaker than the full
-  62-feature model is expected to be, since it only uses the 6 features
-  shared with the rejected file; **see `final_report_metrics.txt`** for the
-  full model's actual held-out AUC/KS/Gini/Brier from `06_report_pd.py`.
-- **See `risk_bands.csv`** for the decile-level PD table (risk grade, count,
-  mean predicted PD, observed default rate) on the held-out test set.
-- **See `reject_inference_comparison.txt`** for baseline-vs-augmented
-  performance after incorporating reject inference.
+| Metric | Value |
+|---|---|
+| AUC-ROC | **0.7144** |
+| Gini | **0.4288** |
+| KS statistic | **0.3068** |
+| Brier score (raw) | 0.1281 |
+| Brier score (calibrated) | 0.1285 |
+
+AUC of 0.71 / KS of 0.31 is a reasonable, unremarkable result for a
+credit-risk PD model built on raw, non-price-based applicant features (recall
+`grade`/`sub_grade`/`int_rate` were deliberately excluded — see Section 11).
+
+**⚠ Calibration note**: the calibrated Brier score (0.1285) is very slightly
+*worse* than the raw model's Brier score (0.1281). Isotonic calibration
+didn't meaningfully help here — it passed the build-in check only because
+that check allows up to a 5% degradation, not because calibration
+demonstrably improved anything. The risk-band table below shows why: the
+model is **overconfident at the high-risk end**.
+
+**Risk bands (deciles), held-out test set:**
+
+| Grade | Predicted PD range | N | Mean predicted PD | Observed default rate | Gap |
+|---|---|---|---|---|---|
+| A | 0.000–0.048 | 3,870 | 3.08% | 2.89% | +0.19 |
+| B | 0.048–0.071 | 3,395 | 6.25% | 6.19% | +0.06 |
+| C | 0.071–0.096 | 2,610 | 9.25% | 7.32% | +1.93 |
+| D | 0.096–0.130 | 3,592 | 11.79% | 11.53% | +0.26 |
+| E | 0.130–0.158 | 3,011 | 14.76% | 14.02% | +0.74 |
+| F | 0.158–0.197 | 3,243 | 18.14% | 16.37% | +1.77 |
+| G | 0.197–0.250 | 4,471 | 23.17% | 18.90% | +4.27 |
+| H | 0.250–0.308 | 2,389 | 28.92% | 24.57% | +4.35 |
+| I | 0.308–0.426 | 3,074 | 35.54% | 27.65% | **+7.89** |
+| J | 0.426–1.000 | 3,184 | 50.95% | 39.04% | **+11.91** |
+
+**Reading this table**: grades A–F track observed default rate closely
+(gap under ~2 points) — the model is well-calibrated for low-to-mid risk
+applicants. Grades G–J diverge substantially, and the divergence grows with
+risk: by grade J, the model predicts a 51% default rate but only 39% of
+those loans actually defaulted. **The model systematically overstates risk
+for the riskiest applicants.** This matters directly for any use of this
+model to set approval thresholds or price loans at the high-risk end — using
+the raw predicted PD as-is would over-reject or over-price that segment.
+
+**Likely causes worth investigating before production use**: fewer
+high-risk training examples for the calibrator to learn from (isotonic
+regression is data-hungry in sparse regions), or genuine model overconfidence
+in the raw XGBoost scores at the tails. Worth trying `method="sigmoid"`
+(Platt scaling) instead of isotonic in `06_report_pd.py`, or binning grades
+G–J more finely to see where exactly the divergence starts.
+
+**Pipeline-stage numbers** (for reference):
+- Raw accepted data loaded: 1,048,575 rows × 89 columns
+- After filtering to resolved loans: 611,803 rows, target positive rate ~21.2%
+- After imputation/encoding: 578,964 rows × 62 features, positive rate 21.384%
+- Best model by mean CV AUC (k=2–16): XGBoost
+- Reduced 6-feature model (accepted-only, used only for reject scoring):
+  test AUC 0.6435, KS 0.2056 — weaker than the full model as expected, since
+  it only has 6 of the 62 features available
+- See `reject_inference_comparison.txt` for baseline-vs-augmented performance
+  after incorporating reject inference
 
 ## 9. Plots produced
 
