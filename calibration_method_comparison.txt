@@ -1,0 +1,4 @@
+Isotonic - overall Brier: 0.12850, top-20%-risk tail |predicted-observed| gap: 0.0938
+Sigmoid  - overall Brier: 0.12951, top-20%-risk tail |predicted-observed| gap: 0.1052
+
+Isotonic still has the smaller (or equal) tail-gap - the overconfidence in grades I/J likely comes from limited calibration data in that sparse region rather than the calibration method itself. A larger calib split, or bucket-specific recalibration, is the more promising next step.

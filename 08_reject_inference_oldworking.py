@@ -35,8 +35,7 @@ Outputs:
 import pickle
 import numpy as np
 import pandas as pd
-from sklearn.metrics import roc_auc_score, roc_curve, brier_score_loss
-from sklearn.calibration import CalibratedClassifierCV
+from sklearn.metrics import roc_auc_score, roc_curve
 import xgboost as xgb
 import lightgbm as lgb
 from catboost import CatBoostClassifier
@@ -102,33 +101,6 @@ with open("reduced_model_baseline.pkl", "wb") as f:
     pickle.dump(baseline_model, f)
 
 # ---------------------------------------------------------------------------
-# 2b. CHECKPOINT: calibrate the reduced model before using it to weight
-#     fuzzy/parceling augmentation. Previously P(good)/P(bad) came straight
-#     from raw scores, which (like the full model) tend to be overconfident -
-#     directly affecting how much weight risky-looking rejects get.
-#
-#     ADDITIVE, non-destructive: baseline_model itself is untouched - still
-#     trained on 100% of accepted data, same AUC/KS already reported above.
-#     Calibration is fit on the held-out TEST set, which baseline_model never
-#     trained on, so no re-splitting or re-fitting of the base model is needed.
-# ---------------------------------------------------------------------------
-try:
-    from sklearn.frozen import FrozenEstimator  # sklearn >= 1.6
-    reduced_calibrator = CalibratedClassifierCV(FrozenEstimator(baseline_model), method="isotonic")
-except ImportError:
-    reduced_calibrator = CalibratedClassifierCV(baseline_model, method="isotonic", cv="prefit")
-reduced_calibrator.fit(X_test_acc, y_test_acc)
-
-raw_brier = brier_score_loss(y_test_acc, baseline_test_pred)
-calibrated_test_pred = reduced_calibrator.predict_proba(X_test_acc)[:, 1]
-calibrated_brier = brier_score_loss(y_test_acc, calibrated_test_pred)
-print(f"\nReduced model calibration - raw Brier: {raw_brier:.5f}, "
-      f"calibrated Brier: {calibrated_brier:.5f}")
-
-with open("reduced_model_calibrator.pkl", "wb") as f:
-    pickle.dump(reduced_calibrator, f)
-
-# ---------------------------------------------------------------------------
 # 3. Prepare rejected data: encode categoricals with the SAME encoders fit on
 #    accepted data (03's label_encoders.pkl), impute missing values with
 #    accepted-derived statistics (never rejected's own - keeps this leakage-safe
@@ -169,9 +141,9 @@ for col in ["loan_amnt", "dti", "risk_score", "zip_code", "emp_length"]:
 X_rejected = rejected_df[REDUCED_FEATURES]
 
 # ---------------------------------------------------------------------------
-# 4. Score rejected applicants (using the CALIBRATED reduced model - see 2b)
+# 4. Score rejected applicants
 # ---------------------------------------------------------------------------
-p_bad = reduced_calibrator.predict_proba(X_rejected)[:, 1]
+p_bad = baseline_model.predict_proba(X_rejected)[:, 1]
 p_good = 1 - p_bad
 rejected_df["P_bad"] = p_bad
 rejected_df["P_good"] = p_good
@@ -242,22 +214,6 @@ with open("reject_inference_comparison.txt", "w") as f:
         "(model quality on the 6 shared features, or the fuzzy-weighting method) "
         "need review before using this model in production.\n"
     )
-    delta_auc = augmented_auc - baseline_auc
-    delta_ks = augmented_ks - baseline_ks
-    if abs(delta_auc) > 0.02 or abs(delta_ks) > 0.03:
-        f.write(
-            f"\nFLAG: delta AUC ({delta_auc:+.4f}) or delta KS ({delta_ks:+.4f}) "
-            f"exceeds a reasonable stability threshold (0.02 / 0.03) - this is "
-            f"large enough to warrant a closer look before trusting the augmented "
-            f"model, not just noting it as expected variation.\n"
-        )
-        print(f"FLAG: large shift after augmentation - delta AUC {delta_auc:+.4f}, "
-              f"delta KS {delta_ks:+.4f}. See reject_inference_comparison.txt")
-    else:
-        f.write(
-            f"\nDelta AUC ({delta_auc:+.4f}) and delta KS ({delta_ks:+.4f}) are within "
-            f"a reasonable stability range - no red flag raised.\n"
-        )
 
 # optional: hard-cutoff alternative, for comparison against fuzzy augmentation
 if HARD_CUTOFF is not None:
@@ -272,5 +228,5 @@ if HARD_CUTOFF is not None:
     print(f"\nHard-cutoff alternative (threshold={HARD_CUTOFF}) test AUC: {hard_auc:.4f} "
           f"(compare to fuzzy augmented AUC {augmented_auc:.4f})")
 
-print("\nSaved: rejected_scored.csv, reduced_model_baseline.pkl, reduced_model_calibrator.pkl, "
+print("\nSaved: rejected_scored.csv, reduced_model_baseline.pkl, "
       "reduced_model_augmented.pkl, reject_inference_comparison.txt")

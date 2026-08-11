@@ -147,72 +147,6 @@ assert metrics_report["test_Brier_calibrated"] <= metrics_report["test_Brier_raw
 print("\nCHECK: calibrated Brier <= raw Brier (calibration improved probability quality)")
 
 # ---------------------------------------------------------------------------
-# 5b. CHECKPOINT: address the calibration overconfidence found in grades I/J
-#     (predicted PD ~7-12 points higher than observed default rate). Isotonic
-#     regression can overfit in thin/sparse regions of the score distribution;
-#     sigmoid (Platt) calibration is smoother and worth comparing directly,
-#     especially in the tail where isotonic underperformed.
-#
-#     ADDITIVE, non-destructive: saved as separate artifacts
-#     (calibrator_sigmoid.pkl, pd_predictions_test_sigmoid.csv) rather than
-#     overwriting calibrator.pkl / calibrated_pd already in use, so you can
-#     compare and choose deliberately rather than have it silently swapped.
-# ---------------------------------------------------------------------------
-try:
-    from sklearn.frozen import FrozenEstimator
-    calibrator_sigmoid = CalibratedClassifierCV(FrozenEstimator(final_model), method="sigmoid")
-except ImportError:
-    calibrator_sigmoid = CalibratedClassifierCV(final_model, method="sigmoid", cv="prefit")
-calibrator_sigmoid.fit(X_calib, y_calib)
-calibrated_pd_sigmoid = calibrator_sigmoid.predict_proba(X_test)[:, 1]
-
-def tail_calibration_gap(y_true, y_prob, top_frac=0.2):
-    """Mean |predicted - observed| PD among the riskiest top_frac of
-    applicants (roughly the grade I/J region) - the region isotonic
-    underperformed in, per the risk_bands.csv findings."""
-    threshold = np.quantile(y_prob, 1 - top_frac)
-    mask = y_prob >= threshold
-    return abs(y_prob[mask].mean() - y_true[mask].mean())
-
-gap_isotonic = tail_calibration_gap(y_test.values, calibrated_pd)
-gap_sigmoid = tail_calibration_gap(y_test.values, calibrated_pd_sigmoid)
-brier_sigmoid = brier_score_loss(y_test, calibrated_pd_sigmoid)
-
-calib_comparison = (
-    f"Isotonic - overall Brier: {metrics_report['test_Brier_calibrated']:.5f}, "
-    f"top-20%-risk tail |predicted-observed| gap: {gap_isotonic:.4f}\n"
-    f"Sigmoid  - overall Brier: {brier_sigmoid:.5f}, "
-    f"top-20%-risk tail |predicted-observed| gap: {gap_sigmoid:.4f}\n"
-)
-print("\n=== Calibration method comparison (isotonic vs sigmoid), tail focus ===")
-print(calib_comparison)
-
-with open("calibration_method_comparison.txt", "w") as f:
-    f.write(calib_comparison)
-    if gap_sigmoid < gap_isotonic:
-        f.write(
-            "\nSigmoid calibration has a SMALLER tail-gap than isotonic - it more "
-            "accurately calibrates grades I/J. Consider using calibrator_sigmoid.pkl "
-            "in place of calibrator.pkl if tail accuracy matters most for your use "
-            "case (e.g. setting approval thresholds at the high-risk end).\n"
-        )
-    else:
-        f.write(
-            "\nIsotonic still has the smaller (or equal) tail-gap - the overconfidence "
-            "in grades I/J likely comes from limited calibration data in that sparse "
-            "region rather than the calibration method itself. A larger calib split, "
-            "or bucket-specific recalibration, is the more promising next step.\n"
-        )
-
-with open("calibrator_sigmoid.pkl", "wb") as f:
-    pickle.dump(calibrator_sigmoid, f)
-
-sigmoid_out = pd.DataFrame({"PD_sigmoid": calibrated_pd_sigmoid, "target": y_test.values})
-sigmoid_out.to_csv("pd_predictions_test_sigmoid.csv", index=False)
-print("Saved: calibrator_sigmoid.pkl, pd_predictions_test_sigmoid.csv, "
-      "calibration_method_comparison.txt")
-
-# ---------------------------------------------------------------------------
 # 6. Requirement 2 - Calibration / reliability plot
 # ---------------------------------------------------------------------------
 test_out = X_test.copy()
@@ -272,3 +206,10 @@ with open("calibrator.pkl", "wb") as f:
 
 print("\nSaved: final_model.pkl, calibrator.pkl, pd_predictions_test.csv, risk_bands.csv, "
       "calibration_plot.png, pd_distribution.png, shap_summary.png, final_report_metrics.txt")
+
+#############
+#One thing to watch when you run it: the assertion at the end (calibrated Brier <= raw Brier * 1.05) will fail loudly if isotonic calibration doesn't help — 
+# if that happens, it's usually because the calib split is too small relative to your class imbalance, or isotonic is overfitting; 
+# switching method="isotonic" to method="sigmoid" (Platt scaling) in the calibrator line is the fix, 
+# and I've left that as a one-line change if needed.
+#############
