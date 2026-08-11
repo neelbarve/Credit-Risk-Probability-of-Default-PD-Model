@@ -264,6 +264,26 @@ that check allows up to a 5% degradation, not because calibration
 demonstrably improved anything. The risk-band table below shows why: the
 model is **overconfident at the high-risk end**.
 
+**Follow-up investigation — isotonic vs. sigmoid (Platt) calibration**: to
+rule out "wrong calibration method" as the cause, sigmoid calibration was
+tried as an alternative and directly compared in the top-20%-risk tail
+(roughly grades I/J):
+
+| Method | Overall Brier | Tail gap (top 20% risk) |
+|---|---|---|
+| Isotonic | 0.12850 | **0.0938** |
+| Sigmoid | 0.12951 | 0.1052 |
+
+Isotonic actually performs *better* in the tail than sigmoid on both
+metrics — ruling out a simple method swap as the fix. **This points to a
+data sparsity problem, not a methodology problem**: the calibration split
+(20% of train) has relatively few high-risk examples for the calibrator to
+fit against in that sparse region, so its tail estimate is less reliable
+regardless of which calibration technique is used. This is a genuine,
+documented limitation rather than a resolved issue — see Section 12 for
+next steps if closing this gap becomes a priority (larger calib split,
+bucket-specific recalibration).
+
 **Risk bands (deciles), held-out test set:**
 
 | Grade | Predicted PD range | N | Mean predicted PD | Observed default rate | Gap |
@@ -392,10 +412,27 @@ itself or from an unvalidated base model.
 
 ## 12. Known limitations / natural next steps
 
-- Reduced-feature (6-column) model, used for scoring rejects, is
-  meaningfully weaker than the full model — reject inference conclusions are
-  only as good as this reduced model's ability to rank-order risk on limited
-  information.
+- **Tail calibration gap in grades I/J remains unresolved** (isotonic tail
+  gap 0.094, confirmed not fixable by switching to sigmoid calibration —
+  see Section 8). Most likely cause: sparse high-risk examples in the 20%
+  calibration split. Two concrete next steps if this needs closing: (a)
+  increase the calibration split size (currently 20% of train), trading off
+  against less data for the base model fit, or (b) bucket-specific
+  recalibration — fit a separate, simpler adjustment just for the top
+  deciles instead of one isotonic curve across the full range.
+- **Reduced-feature (6-column) model, used for scoring rejects, is now
+  calibrated** (isotonic, fit on the held-out accepted test set — see
+  `reduced_model_calibrator.pkl`) before being used for fuzzy/parceling
+  augmentation weights. Still meaningfully weaker than the full model
+  (AUC 0.6435 vs. 0.7144) — reject inference conclusions are only as good
+  as this reduced model's ability to rank-order risk on 6 features.
+- **Reject inference stability confirmed, not "validated."** Comparing
+  baseline vs. augmented model on accepted test data showed a small,
+  stable shift (ΔAUC −0.0046, ΔKS −0.0090 — well within the 0.02/0.03
+  flag thresholds built into the script). This confirms augmentation
+  didn't destabilize known-label performance, but — as always with reject
+  inference — it cannot confirm the augmented model is actually better at
+  scoring real rejected applicants, since no ground truth exists for them.
 - No regulatory/adverse-action-notice tooling built yet (would layer on top
   of the existing SHAP explainability).
 - The full 62-feature model does not yet incorporate reject inference

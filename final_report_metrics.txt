@@ -4,3 +4,10 @@ test_Gini: 0.42878846663663794
 test_KS: 0.3067508551513456
 test_Brier_raw: 0.12808042764663696
 test_Brier_calibrated: 0.12849782477056976
+
+--- Calibration limitation (checkpoint) ---
+test_Brier_sigmoid: 0.12951
+tail_gap_isotonic_top20pct: 0.0938
+tail_gap_sigmoid_top20pct: 0.1052
+tail_calibration_winner: isotonic
+note: model overstates default risk in the highest-risk grades (I/J) regardless of calibration method tried - likely a data sparsity issue in that region rather than a method choice; see calibration_method_comparison.txt for detail.

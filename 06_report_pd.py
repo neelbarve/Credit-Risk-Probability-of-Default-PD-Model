@@ -212,6 +212,22 @@ sigmoid_out.to_csv("pd_predictions_test_sigmoid.csv", index=False)
 print("Saved: calibrator_sigmoid.pkl, pd_predictions_test_sigmoid.csv, "
       "calibration_method_comparison.txt")
 
+# fold the tail-calibration finding into the main report file so it's not
+# only sitting in a separate comparison file
+with open("final_report_metrics.txt", "a") as f:
+    f.write(f"\n--- Calibration limitation (checkpoint) ---\n")
+    f.write(f"test_Brier_sigmoid: {brier_sigmoid}\n")
+    f.write(f"tail_gap_isotonic_top20pct: {gap_isotonic}\n")
+    f.write(f"tail_gap_sigmoid_top20pct: {gap_sigmoid}\n")
+    winner = "sigmoid" if gap_sigmoid < gap_isotonic else "isotonic"
+    f.write(f"tail_calibration_winner: {winner}\n")
+    f.write(
+        "note: model overstates default risk in the highest-risk grades "
+        "(I/J) regardless of calibration method tried - likely a data "
+        "sparsity issue in that region rather than a method choice; "
+        "see calibration_method_comparison.txt for detail.\n"
+    )
+
 # ---------------------------------------------------------------------------
 # 6. Requirement 2 - Calibration / reliability plot
 # ---------------------------------------------------------------------------
