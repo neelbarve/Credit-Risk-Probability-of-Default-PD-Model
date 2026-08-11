@@ -1,3 +1,6 @@
+# --- self/rough files ---
+improvement_ideas.txt
+
 # --- Raw & intermediate data (regenerate by rerunning 00-08) ---
 accepted.csv
 rejected.csv
@@ -30,5 +33,3 @@ venv/
 Thumbs.db
 .vscode/
 
-# --- self/rough files ---
-improvement_ideas.txt
