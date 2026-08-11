@@ -1,0 +1,5 @@
+Baseline  (accepted only)      - AUC: 0.6435  KS: 0.2056
+Augmented (accepted + rejects) - AUC: 0.6410  KS: 0.1980
+Delta AUC: -0.0026   Delta KS: -0.0076
+
+NOTE: this compares performance on ACCEPTED test data only - it shows whether adding inferred reject labels destabilized the model on data we actually have outcomes for. It cannot confirm the model got any BETTER at predicting rejected applicants specifically, since no true outcome exists for them. A small AUC/KS drop here is common and not automatically bad - it can mean the model is adjusting for a population the accepted-only model never saw. A large drop is a signal the augmentation assumptions (model quality on the 6 shared features, or the fuzzy-weighting method) need review before using this model in production.

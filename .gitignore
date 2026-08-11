@@ -1,0 +1,31 @@
+# --- Raw & intermediate data (regenerate by rerunning 00-08) ---
+accepted.csv
+rejected.csv
+train.csv
+test.csv
+train_imputed.csv
+test_imputed.csv
+rejected_aligned.csv
+rejected_scored.csv
+
+# --- Model / encoder artifacts (large; use Git LFS if you want these tracked) ---
+*.pkl
+loss_curves.json
+
+# --- Scratch / working files, not part of the deliverable ---
+files/
+temp_or_other_files/
+files.zip
+guide1.txt
+
+# --- Python ---
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+venv/
+.venv/
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.vscode/
